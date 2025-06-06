@@ -9,6 +9,7 @@ import config
 import keyboards
 # Importar módulos de handlers desde la carpeta 'handlers'
 from handlers import common, turno, receta, pago, misc, utils # Importar utils también
+from handlers.common import global_error_handler # Import the global error handler
 import google_calendar_utils as gcal
 
 # Configurar logging
@@ -31,6 +32,10 @@ def main() -> None:
 
     application.bot_data['calendar_service'] = calendar_service
     logger.info("Servicio Google Calendar añadido a application.bot_data.")
+
+    # --- Registrar Global Error Handler ---
+    application.add_error_handler(global_error_handler)
+    logger.info("Global error handler registrado.")
 
     # --- Registrar Handlers ---
     # Grupo 0 (por defecto) - Mayor prioridad
@@ -61,13 +66,21 @@ def main() -> None:
     # Receta
     application.add_handler(MessageHandler(filters.Text([config.BTN_RECETA_SOLICITAR]), receta.handle_receta_sub_choice))
     application.add_handler(MessageHandler(filters.Text([config.BTN_RECETA_CORREGIR]), receta.handle_receta_sub_choice))
+    application.add_handler(MessageHandler(filters.Text([config.BTN_RECETA_CONSULTAR_ESTADO]), receta.handle_receta_sub_choice)) # New handler
     # Pago
     application.add_handler(MessageHandler(filters.Text([config.BTN_PAGO_TRANFERENCIA]), pago.handle_pago_sub_choice))
     application.add_handler(MessageHandler(filters.Text([config.BTN_PAGO_CONSULTORIO]), pago.handle_pago_sub_choice))
+    application.add_handler(MessageHandler(filters.Text([config.BTN_PAGO_ONLINE_INFO]), pago.handle_pago_sub_choice))
+    application.add_handler(MessageHandler(filters.Text([config.BTN_PAGO_RECORDATORIO_INFO]), pago.handle_pago_sub_choice)) # New handler
 
     # --- NUEVO: CallbackQueryHandler para botones inline ---
     # Captura todos los callbacks que empiezan con el prefijo definido en config
     application.add_handler(CallbackQueryHandler(turno.handle_cancel_callback, pattern=f"^{config.CALLBACK_PREFIX_CANCEL}"))
+    application.add_handler(CallbackQueryHandler(turno.handle_edit_appointment_callback, pattern=f"^{config.CALLBACK_PREFIX_EDIT}")) # Step 1 of edit (select appointment)
+    application.add_handler(CallbackQueryHandler(turno.handle_proceed_edit_callback, pattern=f"^{config.CALLBACK_PREFIX_PROCEED_EDIT}")) # Step 2 of edit (confirm selection to edit)
+    application.add_handler(CallbackQueryHandler(turno.handle_abort_edit_callback, pattern=f"^{config.CALLBACK_PREFIX_ABORT_EDIT}"))   # Step 2 of edit (cancel selection to edit)
+    application.add_handler(CallbackQueryHandler(turno.handle_finalize_edit_callback, pattern=f"^{config.CALLBACK_PREFIX_FINALIZE_EDIT}")) # Step 3 of edit (confirm GCal changes)
+    application.add_handler(CallbackQueryHandler(turno.handle_cancel_finalize_edit_callback, pattern=f"^{config.CALLBACK_PREFIX_CANCEL_FINALIZE_EDIT}")) # Step 3 of edit (cancel GCal changes)
     # Puedes añadir más CallbackQueryHandlers para otros prefijos si es necesario
 
     # --- Manejador de texto general (Grupo 1 - Menor prioridad) ---
