@@ -19,12 +19,15 @@ turno_menu_markup = ReplyKeyboardMarkup(
 receta_menu_markup = ReplyKeyboardMarkup(
     [[KeyboardButton(config.BTN_RECETA_SOLICITAR)],
      [KeyboardButton(config.BTN_RECETA_CORREGIR)],
+     [KeyboardButton(config.BTN_RECETA_CONSULTAR_ESTADO)], # New button
      [KeyboardButton(config.BTN_VOLVER)],],
     resize_keyboard=True
 )
 pago_menu_markup = ReplyKeyboardMarkup(
-    [[KeyboardButton(config.BTN_PAGO_TRANFERENCIA)],
+    [[KeyboardButton(config.BTN_PAGO_ONLINE_INFO)],
+     [KeyboardButton(config.BTN_PAGO_TRANFERENCIA)],
      [KeyboardButton(config.BTN_PAGO_CONSULTORIO)],
+     [KeyboardButton(config.BTN_PAGO_RECORDATORIO_INFO)], # New button
      [KeyboardButton(config.BTN_VOLVER)],],
     resize_keyboard=True
 )
@@ -51,9 +54,15 @@ def create_timeslot_keyboard(slots: list):
     return ReplyKeyboardMarkup(keys, one_time_keyboard=True, resize_keyboard=True)
 
 
-# --- NUEVA Función para Teclado Inline de Cancelación ---
-def create_cancel_appointments_keyboard(appointments: list) -> InlineKeyboardMarkup | None:
-    """Crea un InlineKeyboardMarkup con botones para cancelar turnos específicos."""
+# --- Función para Teclado Inline de Gestión de Turnos (Cancelar/Editar) ---
+def create_appointments_inline_keyboard(appointments: list, button_text_prefix: str, callback_prefix: str) -> InlineKeyboardMarkup | None:
+    """
+    Crea un InlineKeyboardMarkup con botones para acciones en turnos específicos (ej. cancelar, editar).
+    Args:
+        appointments: Lista de diccionarios, cada uno representando un turno.
+        button_text_prefix: Prefijo para el texto del botón (ej. "🚫 Cancelar", "✏️ Editar").
+        callback_prefix: Prefijo para el callback_data (ej. config.CALLBACK_PREFIX_CANCEL).
+    """
     if not appointments:
         return None # No crear teclado si no hay turnos
 
@@ -68,27 +77,33 @@ def create_cancel_appointments_keyboard(appointments: list) -> InlineKeyboardMar
             continue # Saltar si falta información esencial
 
         # Crear el texto del botón
-        button_text = f"🚫 {doctor_name} - {display_time}"
+        button_text = f"{button_text_prefix} {doctor_name} - {display_time}"
 
-        # Crear el callback_data: prefijo_eventId_calendarId
-        # Es importante que el callback_data no sea demasiado largo.
-        # Usaremos la clave del doctor (ej: "Dr. Rodriguez") en lugar del ID de calendario completo si es posible.
-        doctor_key = config.DOCTOR_NAMES_FROM_ID.get(calendar_id)
-        if not doctor_key: # Fallback si el ID no está en el mapeo (raro)
-            callback_data = None # O manejar error
-            # Alternativa: Hashear calendar_id si es muy largo o contiene caracteres inválidos
-            # import hashlib
-            # cal_hash = hashlib.md5(calendar_id.encode()).hexdigest()[:8] # Hash corto
-            # callback_data = f"{config.CALLBACK_PREFIX_CANCEL}{event_id}_{cal_hash}"
-        else:
-             callback_data = f"{config.CALLBACK_PREFIX_CANCEL}{event_id}_{doctor_key}"
+        # Crear el callback_data: callback_prefix_eventId_doctorKey
+        # Usaremos la clave del doctor (ej: "Dr. Rodriguez") en lugar del ID de calendario completo.
+        doctor_key = None
+        for key, value in config.CALENDAR_IDS_DOCTORES.items(): # Iterate to find key by calendar_id
+            if value == calendar_id:
+                doctor_key = key
+                break
 
+        if not doctor_key:
+            # Fallback si el ID no está en el mapeo (raro, indicaría inconsistencia en config o datos de GCal)
+            # O si se usa un calendar_id que no es de un doctor específico (ej. calendario general).
+            # Intentar usar el doctor_name si está disponible y es una clave válida, sino omitir.
+            if doctor_name in config.CALENDAR_IDS_DOCTORES: # Check if doctor_name itself is a valid key
+                 doctor_key = doctor_name
+            else:
+                logging.warning(f"No se pudo determinar doctor_key para calendar_id '{calendar_id}' (doctor: {doctor_name}). Omitiendo botón.")
+                continue # Saltar este turno
+
+        callback_data = f"{callback_prefix}{event_id}_{doctor_key}"
 
         # Comprobar longitud del callback_data (límite Telegram ~64 bytes)
-        if callback_data and len(callback_data.encode('utf-8')) <= 64:
+        if len(callback_data.encode('utf-8')) <= 64:
             keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
         else:
-             logging.warning(f"Callback data demasiado largo o inválido, omitiendo botón: {callback_data}")
+            logging.warning(f"Callback data demasiado largo para el botón (omitido): {callback_data}")
 
 
     # Añadir botón para cancelar la selección (opcional)
@@ -97,4 +112,41 @@ def create_cancel_appointments_keyboard(appointments: list) -> InlineKeyboardMar
     if not keyboard: # Si ningún botón fue válido
         return None
 
+    return InlineKeyboardMarkup(keyboard)
+
+
+def create_edit_confirmation_keyboard(event_id: str, doctor_key: str, callback_proceed_prefix: str, callback_abort_prefix: str) -> InlineKeyboardMarkup:
+    """
+    Crea un InlineKeyboardMarkup para confirmar o cancelar la edición de un turno.
+    Args:
+        event_id: El ID del evento a editar.
+        doctor_key: La clave del doctor (para reconstruir callback o identificar).
+        callback_proceed_prefix: El prefijo para el callback_data de confirmar.
+        callback_abort_prefix: El prefijo para el callback_data de abortar/cancelar.
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Confirmar Edición", callback_data=f"{callback_proceed_prefix}{event_id}_{doctor_key}"),
+            InlineKeyboardButton("❌ Cancelar Edición", callback_data=f"{callback_abort_prefix}{event_id}_{doctor_key}")
+            # Consider if event_id and doctor_key are needed for abort, or if a generic "abort_edit_process" is better.
+            # For now, keeping them for consistency or potential logging on abort.
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def create_finalize_edit_keyboard(callback_finalize_prefix: str, callback_cancel_finalize_prefix: str, placeholder_data: str = "confirm") -> InlineKeyboardMarkup:
+    """
+    Crea un InlineKeyboardMarkup para la confirmación final antes de reagendar.
+    Args:
+        callback_finalize_prefix: Prefijo para el callback_data de finalizar/confirmar.
+        callback_cancel_finalize_prefix: Prefijo para el callback_data de cancelar esta operación final.
+        placeholder_data: Datos placeholder para el callback, ya que los detalles se tomarán de user_data.
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Confirmar y Reagendar", callback_data=f"{callback_finalize_prefix}{placeholder_data}"),
+            InlineKeyboardButton("❌ Cancelar Operación", callback_data=f"{callback_cancel_finalize_prefix}{placeholder_data}")
+        ]
+    ]
     return InlineKeyboardMarkup(keyboard)
