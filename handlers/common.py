@@ -62,6 +62,10 @@ async def route_text_message_by_state(update: Update, context: ContextTypes.DEFA
     try:
         # --- PASO 1: DIRIGIR SEGÚN ESTADO ---
         from . import turno, receta, misc
+    except ImportError as e:
+        logger.critical(f"Failed to import state handlers (turno, receta, misc): {e}", exc_info=True)
+        await update.message.reply_text("Ocurrió un error interno al procesar tu solicitud. Por favor, intenta más tarde.")
+        return # Exit the function if imports fail
 
     state_handlers = {
         config.STATE_WAITING_DOCTOR: turno.handle_turno_solicitar_doctor,
