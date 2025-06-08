@@ -67,87 +67,68 @@ async def route_text_message_by_state(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text("Ocurrió un error interno al procesar tu solicitud. Por favor, intenta más tarde.")
         return # Exit the function if imports fail
 
-    state_handlers = {
-        config.STATE_WAITING_DOCTOR: turno.handle_turno_solicitar_doctor,
-        config.STATE_WAITING_DAY: turno.handle_turno_solicitar_dia,
-        config.STATE_WAITING_TIMESLOT: turno.handle_turno_solicitar_hora,
-        config.STATE_EDIT_AWAITING_DATE: turno.handle_turno_editar_placeholder,
-        config.STATE_RECIPE_AWAITING_INFO: receta.handle_receta_info_text,
-        config.STATE_RECIPE_AWAITING_CORRECTION: receta.handle_receta_correction_text,
-        config.STATE_TALKING_TO_SECRETARY: misc.handle_secretary_message,
-    }
-
-    if state in state_handlers:
-        logger.debug(f"Estado '{state}' activo, llamando a {state_handlers[state].__name__}")
-        try:
-            await state_handlers[state](update, context)
-        except Exception as e: # Error within a specific state handler
-            logger.error(f"Error executing handler for state '{state}' for user {user.id} in chat {chat_id}: {e}", exc_info=True)
-
-            state_friendly_names = {
-                config.STATE_WAITING_DOCTOR: "selección de doctor",
-                config.STATE_WAITING_DAY: "selección de día",
-                config.STATE_WAITING_TIMESLOT: "selección de hora",
-                config.STATE_EDIT_AWAITING_DATE: "edición de turno",
-                config.STATE_RECIPE_AWAITING_INFO: "solicitud de receta",
-                config.STATE_RECIPE_AWAITING_CORRECTION: "corrección de receta",
-                config.STATE_TALKING_TO_SECRETARY: "contacto con secretaría",
-            }
-            state_desc = state_friendly_names.get(state, "acción actual")
-            user_message = f"Hubo un problema al procesar tu solicitud relacionada con la {state_desc}. Por favor, intenta de nuevo."
-            if isinstance(e, TelegramError):
-                 user_message = f"Hubo un problema de comunicación procesando tu solicitud de {state_desc}. Por favor, verifica tu conexión e intenta de nuevo."
-
-            try:
-                await update.message.reply_text(user_message)
-            except Exception as e_reply:
-                logger.error(f"Failed to send error message to user {user.id} in chat {chat_id} (after state handler error): {e_reply}", exc_info=True)
-            # Considerar limpiar estado aquí si el error es irrecuperable
-            # context.user_data.pop('state', None)
-            # await utils.send_main_menu(update, context, "Debido a un error, hemos cancelado la acción anterior.")
-        return
-
-    # --- SI NO HABÍA ESTADO ACTIVO O ESTADO NO MAPEADO ---
-    logger.debug(f"No hay estado activo o '{state}' no mapeado. Verificando Sí/No.")
-
-    # --- PASO 2: Manejar Sí/No si no hay estado ---
+    # Outer try for the entire main logic of the function
     try:
-        processed_yes_no = await misc.handle_yes_no(update, context)
-        if processed_yes_no:
-            logger.info("Mensaje procesado como Sí/No.")
-            return
-    except Exception as e:
-        logger.error(f"Error llamando misc.handle_yes_no: {e}", exc_info=True)
-        # It's generally better not to have critical fallback logic inside an exception handler
-        # unless that's specifically the intent. Assuming the intent is to call unknown_text if not processed by yes/no.
+        # --- BEGINNING OF OUTER TRY BLOCK ---
+        state_handlers = {
+            config.STATE_WAITING_DOCTOR: turno.handle_turno_solicitar_doctor,
+            config.STATE_WAITING_DAY: turno.handle_turno_solicitar_dia,
+            config.STATE_WAITING_TIMESLOT: turno.handle_turno_solicitar_hora,
+            config.STATE_EDIT_AWAITING_DATE: turno.handle_turno_editar_placeholder,
+            config.STATE_RECIPE_AWAITING_INFO: receta.handle_receta_info_text,
+            config.STATE_RECIPE_AWAITING_CORRECTION: receta.handle_receta_correction_text,
+            config.STATE_TALKING_TO_SECRETARY: misc.handle_secretary_message,
+        }
 
-    # --- PASO 3: Fallback final: Mensaje desconocido ---
-    # These lines are now correctly dedented.
-    logger.info(f"Text '{text}' from user {user.id} in chat {chat_id} does not correspond to a state or Yes/No. Calling handle_unknown_text...")
-    await handle_unknown_text(update, context)
-    # The global try-except for route_text_message_by_state starts here
-    # We need to ensure this except block is at the correct level,
-    # aligned with the initial try block of the function, not the PASO 2 try block.
-    # However, the original problem description only asked to fix the indentation of PASO 3.
-    # The following 'except Exception as e:' should be aligned with the function's main try block,
-    # which is not explicitly shown in the diff but implied by the context of the file.
-    # For now, focusing *only* on the requested change.
-    # The provided diff search area ends before the main function's except,
-    # so we are only correcting the specific lines mentioned.
-    # If the outer try-except is also misaligned, that would be a separate issue.
-    # Based on the original file, the 'except Exception as e:' below is part of the *outer* try-except block
-    # that encompasses PASO 1, PASO 2, and PASO 3.
+        if state in state_handlers:
+            logger.debug(f"Estado '{state}' activo, llamando a {state_handlers[state].__name__}")
+            try:
+                await state_handlers[state](update, context)
+            except Exception as e_handler: # Error within a specific state handler
+                logger.error(f"Error executing handler for state '{state}' for user {user.id} in chat {chat_id}: {e_handler}", exc_info=True)
 
-    # This 'except Exception as e' should be aligned with the try that starts before PASO 1
-    # The provided context suggests it might be, but let's ensure our change doesn't misalign it.
-    # The change is only about dedenting the two lines of PASO 3.
-    # The following lines should remain as they are relative to the *outer* try block.
-    # The issue was that PASO 3 was *inside* the except of PASO 2.
-    # Now, PASO 3 is *after* the try-except of PASO 2.
-    # The final 'except Exception as e' for the whole function should be at the same level as the *first* try in the function.
-    # This seems to be the case in the original file structure (line 122 onwards).
-    # The crucial part is that the two lines of PASO 3 are no longer inside PASO 2's except.
-    except Exception as e:
+                state_friendly_names = {
+                    config.STATE_WAITING_DOCTOR: "selección de doctor",
+                    config.STATE_WAITING_DAY: "selección de día",
+                    config.STATE_WAITING_TIMESLOT: "selección de hora",
+                    config.STATE_EDIT_AWAITING_DATE: "edición de turno",
+                    config.STATE_RECIPE_AWAITING_INFO: "solicitud de receta",
+                    config.STATE_RECIPE_AWAITING_CORRECTION: "corrección de receta",
+                    config.STATE_TALKING_TO_SECRETARY: "contacto con secretaría",
+                }
+                state_desc = state_friendly_names.get(state, "acción actual")
+                user_message = f"Hubo un problema al procesar tu solicitud relacionada con la {state_desc}. Por favor, intenta de nuevo."
+                if isinstance(e_handler, TelegramError): # Check specific exception variable
+                     user_message = f"Hubo un problema de comunicación procesando tu solicitud de {state_desc}. Por favor, verifica tu conexión e intenta de nuevo."
+
+                try:
+                    await update.message.reply_text(user_message)
+                except Exception as e_reply_handler: # Specific variable name
+                    logger.error(f"Failed to send error message to user {user.id} in chat {chat_id} (after state handler error): {e_reply_handler}", exc_info=True)
+                # Considerar limpiar estado aquí si el error es irrecuperable
+                # context.user_data.pop('state', None)
+                # await utils.send_main_menu(update, context, "Debido a un error, hemos cancelado la acción anterior.")
+            return # Important: return after handling state or its error
+
+        # --- SI NO HABÍA ESTADO ACTIVO O ESTADO NO MAPEADO ---
+        logger.debug(f"No hay estado activo o '{state}' no mapeado. Verificando Sí/No.")
+
+        # --- PASO 2: Manejar Sí/No si no hay estado ---
+        try:
+            processed_yes_no = await misc.handle_yes_no(update, context)
+            if processed_yes_no:
+                logger.info("Mensaje procesado como Sí/No.")
+                return
+        except Exception as e_yes_no: # Specific variable name
+            logger.error(f"Error llamando misc.handle_yes_no: {e_yes_no}", exc_info=True)
+            # Fall through to PASO 3 is acceptable if Yes/No handler fails
+
+        # --- PASO 3: Fallback final: Mensaje desconocido ---
+        logger.info(f"Text '{text}' from user {user.id} in chat {chat_id} does not correspond to a state or Yes/No. Calling handle_unknown_text...")
+        await handle_unknown_text(update, context)
+        # --- END OF OUTER TRY BLOCK ---
+
+    except Exception as e:  # This is the except block from original line 150
         logger.error(f"Unhandled error in route_text_message_by_state for user {user.id} in chat {chat_id}: {e}", exc_info=True)
         user_message = "Lo siento, ocurrió un error inesperado al procesar tu mensaje. Por favor, intenta de nuevo o usa /start para volver al menú principal."
         if isinstance(e, TelegramError):
@@ -155,7 +136,7 @@ async def route_text_message_by_state(update: Update, context: ContextTypes.DEFA
 
         try:
             await update.message.reply_text(user_message)
-        except Exception as e_reply:
+        except Exception as e_reply: # Specific variable name
             logger.error(f"Critical: Failed to send generic error message to user {user.id} in chat {chat_id} (route_text_message_by_state): {e_reply}", exc_info=True)
 
 
