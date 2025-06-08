@@ -113,12 +113,40 @@ async def route_text_message_by_state(update: Update, context: ContextTypes.DEFA
     # --- PASO 2: Manejar Sí/No si no hay estado ---
     try:
         processed_yes_no = await misc.handle_yes_no(update, context)
-        if processed_yes_no: logger.info("Mensaje procesado como Sí/No."); return
-    except Exception as e: logger.error(f"Error llamando misc.handle_yes_no: {e}", exc_info=True)
+        if processed_yes_no:
+            logger.info("Mensaje procesado como Sí/No.")
+            return
+    except Exception as e:
+        logger.error(f"Error llamando misc.handle_yes_no: {e}", exc_info=True)
+        # It's generally better not to have critical fallback logic inside an exception handler
+        # unless that's specifically the intent. Assuming the intent is to call unknown_text if not processed by yes/no.
 
-        # --- PASO 3: Fallback final: Mensaje desconocido ---
-        logger.info(f"Text '{text}' from user {user.id} in chat {chat_id} does not correspond to a state or Yes/No. Calling handle_unknown_text...")
-        await handle_unknown_text(update, context)
+    # --- PASO 3: Fallback final: Mensaje desconocido ---
+    # These lines are now correctly dedented.
+    logger.info(f"Text '{text}' from user {user.id} in chat {chat_id} does not correspond to a state or Yes/No. Calling handle_unknown_text...")
+    await handle_unknown_text(update, context)
+    # The global try-except for route_text_message_by_state starts here
+    # We need to ensure this except block is at the correct level,
+    # aligned with the initial try block of the function, not the PASO 2 try block.
+    # However, the original problem description only asked to fix the indentation of PASO 3.
+    # The following 'except Exception as e:' should be aligned with the function's main try block,
+    # which is not explicitly shown in the diff but implied by the context of the file.
+    # For now, focusing *only* on the requested change.
+    # The provided diff search area ends before the main function's except,
+    # so we are only correcting the specific lines mentioned.
+    # If the outer try-except is also misaligned, that would be a separate issue.
+    # Based on the original file, the 'except Exception as e:' below is part of the *outer* try-except block
+    # that encompasses PASO 1, PASO 2, and PASO 3.
+
+    # This 'except Exception as e' should be aligned with the try that starts before PASO 1
+    # The provided context suggests it might be, but let's ensure our change doesn't misalign it.
+    # The change is only about dedenting the two lines of PASO 3.
+    # The following lines should remain as they are relative to the *outer* try block.
+    # The issue was that PASO 3 was *inside* the except of PASO 2.
+    # Now, PASO 3 is *after* the try-except of PASO 2.
+    # The final 'except Exception as e' for the whole function should be at the same level as the *first* try in the function.
+    # This seems to be the case in the original file structure (line 122 onwards).
+    # The crucial part is that the two lines of PASO 3 are no longer inside PASO 2's except.
     except Exception as e:
         logger.error(f"Unhandled error in route_text_message_by_state for user {user.id} in chat {chat_id}: {e}", exc_info=True)
         user_message = "Lo siento, ocurrió un error inesperado al procesar tu mensaje. Por favor, intenta de nuevo o usa /start para volver al menú principal."
