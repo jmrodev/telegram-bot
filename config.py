@@ -30,7 +30,10 @@ BTN_TURNO_SOLICITAR = "➕ Solicitar Turno"; BTN_TURNO_ELIMINAR = "🗑️ Cance
 BTN_TURNO_EDITAR = "✏️ Editar Turno Existente"; BTN_TURNO_VIDEO = "📹 Videollamada"
 BTN_TURNO_DOCTOR = "👨‍⚕️ ¿Con qué doctor?"; BTN_TURNO_SECRETARIA = "🧑‍💼 Comunicarse con Secretaría"
 BTN_RECETA_SOLICITAR = "💊 Solicitar Nueva"; BTN_RECETA_CORREGIR = "✍️ Corregir Existente"
+BTN_RECETA_CONSULTAR_ESTADO = "Consultar Estado de Receta"
 BTN_PAGO_TRANFERENCIA = "🏦 Transferencia"; BTN_PAGO_CONSULTORIO = "🏢 En Consultorio"
+BTN_PAGO_ONLINE_INFO = "Información de Pago Online"
+BTN_PAGO_RECORDATORIO_INFO = "Información de Recordatorio de Pago"
 BTN_VOLVER = "🔙 Volver al Menú Principal"; BTN_CANCELAR_ACCION = "🚫 Cancelar Acción Actual"
 
 # --- Callback Data Prefijos (NUEVO) ---
